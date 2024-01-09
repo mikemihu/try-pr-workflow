@@ -8,18 +8,37 @@ on:
     branches:
      - main
 
+env:
+  GOPRIVATE: "github.com/mikemihu"
+
 jobs:
 
   build:
     name: Go Build & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: 1.21
+
+      - name: Add SSH Go Module Private Key
+        env:
+          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          ssh-agent -a $SSH_AUTH_SOCK > /dev/null	
+          ssh-add - <<< "${{ secrets.GIT_PRIVATE_KEY }}"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+
+      - name: Setup access for private go modules
+        run: |
+          git config --global url."ssh://git@github.com/".insteadOf https://github.com/
 
       - name: Build
         run: go build -v ./...
