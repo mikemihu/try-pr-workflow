@@ -5,43 +5,79 @@ name: Build
 
 on:
   pull_request:
-    branches:
-     - main
+    branches: [ "main" ]
+  push:
+    branches: [ "main" ]
 
 env:
   GOPRIVATE: "github.com/mikemihu"
 
 jobs:
 
-  build:
-    name: Go Build & Test
+#  go-build:
+#    name: Go Build & Test
+#    runs-on: ubuntu-20.04
+#
+#    steps:
+#      - name: Checkout Repository
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Go
+#        uses: actions/setup-go@v4
+#        with:
+#          go-version: 1.21
+#
+#      - name: Add SSH Go Module Private Key
+#        env:
+#          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+#        run: |
+#          mkdir -p ~/.ssh
+#          ssh-keyscan github.com >> ~/.ssh/known_hosts
+#          ssh-agent -a $SSH_AUTH_SOCK > /dev/null
+#          ssh-add - <<< "${{ secrets.GIT_PRIVATE_KEY }}"
+#          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+#
+#      - name: Setup access for private go modules
+#        run: |
+#          git config --global url."ssh://git@github.com/".insteadOf https://github.com/
+#
+#      - name: Build
+#        run: go build -v ./...
+#
+#      - name: Test
+#        run: go test -v ./...
+
+  docker-build:
+    name: Go Build in Docker
     runs-on: ubuntu-20.04
 
+    permissions:
+      contents: read
+      packages: write
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          go-version: 1.21
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
 
-      - name: Add SSH Go Module Private Key
-        env:
-          SSH_AUTH_SOCK: /tmp/ssh_agent.sock
+      - name: Set Environment Variables
         run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan github.com >> ~/.ssh/known_hosts
-          ssh-agent -a $SSH_AUTH_SOCK > /dev/null	
-          ssh-add - <<< "${{ secrets.GIT_PRIVATE_KEY }}"
-          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "${{secrets.GIT_PRIVATE_KEY}}" > id_rsa
+          chmod 600 id_rsa
+          echo "${{secrets.ENV}}" > .env
+          echo "TAG=other" >> $GITHUB_ENV
+          if [ "${{ github.ref }}" == 'refs/heads/main' ]; then
+            export TAG="production"
+            echo "Running on default branch 'main': TAG = $TAG"
+            echo "TAG=$TAG" >> $GITHUB_ENV
+          fi
 
-      - name: Setup access for private go modules
+      - name: Build and Push Docker Image
         run: |
-          git config --global url."ssh://git@github.com/".insteadOf https://github.com/
-
-      - name: Build
-        run: go build -v ./...
-
-      - name: Test
-        run: go test -v ./...
+          echo ${{env.GOPRIVATE}}
+          docker build --build-arg GOPRIVATE=${{env.GOPRIVATE}} -t ghcr.io/${{ github.repository }}:${{ env.TAG }} .
+          docker push ghcr.io/${{ github.repository }}:${{ env.TAG }}

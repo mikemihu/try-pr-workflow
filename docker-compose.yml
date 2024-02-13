@@ -1,0 +1,9 @@
+services:
+  app:
+    tty: true
+    network_mode: host
+    container_name: pr-workflow
+    image: ghcr.io/mikemihu/pr-workflow:production
+    ports:
+      - "3000:3000"
+      - "3001:3001"
