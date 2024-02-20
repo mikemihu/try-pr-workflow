@@ -11,13 +11,14 @@ WORKDIR /app
 
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 go build -o main cmd/api/main.go
+RUN CGO_ENABLED=0 go build -o workflow-app .
 
-FROM scratch
+FROM alpine:3.19
 COPY --from=base /usr/share/zoneinfo /usr/share/zoneinfo
-COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+#COPY --from=base /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=base /etc/passwd /etc/passwd
 COPY --from=base /etc/group /etc/group
 WORKDIR /app
-COPY --from=base /app /app
-ENTRYPOINT ["/app/main"]
+COPY --from=base /app/workflow-app /app
+COPY --from=base /app/.env /app
+ENTRYPOINT ["/app/workflow-app"]
